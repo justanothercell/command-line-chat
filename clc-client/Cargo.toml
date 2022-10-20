@@ -1,0 +1,11 @@
+[package]
+name = "clc-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clc-lib = { path = '../clc-lib', version = '*'}
+serde = {version = "1.0", features = ["derive"] }
+getch = "0.3.1"
+terminal_size = "0.2.1"
+reqwest = {version="0.11.12", features = ["blocking"] }

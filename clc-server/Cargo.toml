@@ -1,0 +1,13 @@
+[package]
+name = "clc-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clc-lib = { path = "../clc-lib", version = "*"}
+tokio = { version = "1.21.2", features = ["macros", "sync", "rt-multi-thread"] }
+tokio-stream = "0.1.11"
+warp = { version="0.3.3", features = ["tls"] }
+serde = {version = "1.0", features = ["derive"] }
+futures = { version = "0.3", default-features = false }
+uuid = { version = "1.2.1", features = ["serde", "v4"] }
