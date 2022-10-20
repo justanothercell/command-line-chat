@@ -1,5 +1,5 @@
 use std::process::exit;
-use clc_lib::protocol::{ChatId, ChatTitle, FilePath, InviteId, ServerUrl, UserName};
+use clc_lib::protocol::{ChatId, ChatTitle, ClientWsMessage, FilePath, InviteId, ServerUrl, UserName};
 use crate::Client;
 use crate::client::{ClientSeal, ThreadClient};
 use crate::web_client::Location;
@@ -10,7 +10,7 @@ pub(crate) enum Command {
     Info,
     Connect(ServerUrl, UserName),
     CreateChat(ChatTitle),
-    Join(ChatId, InviteId),
+    Join(InviteId),
     ListMembers,
     Kick(UserName),
     Quit,
@@ -30,7 +30,7 @@ impl Command {
                 Command::Info => 'i',
                 Command::Connect(_, _) => 'c',
                 Command::CreateChat(_) => 'p',
-                Command::Join(_, _) => 'j',
+                Command::Join(_) => 'j',
                 Command::ListMembers => 'l',
                 Command::Kick(_) => 'k',
                 Command::Quit => 'q',
@@ -105,6 +105,9 @@ pub(crate) fn handle_input(client: &ThreadClient) {
                     Command::Quit => {
                         Client::disconnect_server(client);
                     }
+                    Command::CreateChat(title) => {
+                        Client::create_chat(client, title);
+                    }
                     other => {
                         client.seal().writeln(&format!("'{}' is not available in this context", other.cmd_ident()));
                     }
@@ -114,6 +117,9 @@ pub(crate) fn handle_input(client: &ThreadClient) {
                 match cmd {
                     Command::Quit => {
 
+                    }
+                    Command::SendMessage(content) => {
+                        Client::send_ws_message(&client, ClientWsMessage::Message(content));
                     }
                     other => {
                         client.seal().writeln(&format!("'{}' is not available in this context", other.cmd_ident()));
@@ -158,8 +164,8 @@ fn parse_command(command: String) -> Result<Command, String> {
                     Ok(Command::CreateChat(args.remove(0)))
                 },
                 'j' => {
-                    args_len!(2, 'j')?;
-                    Ok(Command::Join(args.remove(0), args.remove(0)))
+                    args_len!(1, 'j')?;
+                    Ok(Command::Join(args.remove(0)))
                 },
                 'l' => Ok(Command::ListMembers),
                 'k' => {

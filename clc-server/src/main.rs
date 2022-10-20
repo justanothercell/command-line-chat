@@ -1,9 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use warp::{ws::Message, Filter, Rejection};
-use clc_lib::protocol::{ChatId, InviteId, UserId, UserName};
+use warp::http::StatusCode;
+use clc_lib::protocol::{ChatId, ChatTitle, InviteId, UserId, UserName};
 
 mod handler;
 mod ws;
@@ -32,16 +33,19 @@ type Chats = Arc<RwLock<HashMap<ChatId, Chat>>>;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Client {
+    pub(crate) user_id: UserId,
     pub(crate) user_name: UserName,
-    pub(crate) topics: Vec<String>,
+    pub(crate) chat: Option<ChatId>,
     pub(crate) sender: Option<mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct Chat {
-    pub(crate) users: Vec<UserId>,
-    pub(crate) invites: HashMap<InviteId, UserName>,
-    pub(crate) sender: Option<mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>>,
+    pub(crate) chat_id: ChatId,
+    pub(crate) title: ChatTitle,
+    pub(crate) owner: UserId,
+    pub(crate) users: HashSet<UserId>,
+    pub(crate) invites: HashSet<InviteId>,
 }
 
 #[tokio::main]
@@ -49,9 +53,16 @@ async fn main() {
     let clients: Clients = Arc::new(RwLock::new(HashMap::new()));
     let chats: Chats = Arc::new(RwLock::new(HashMap::new()));
 
-    let health_route = warp::path("api/health").and_then(handler::health);
+    // auto-loads https://github.com/DragonFIghter603/command-line-chat/blob/master/index.html
+    let index_route = warp::path!().and_then(|| async {
+        Ok::<_, Rejection>(warp::reply::html(include_str!("../index_loader.html")))
+    });
 
-    let register = warp::path("api/register");
+    let health_route = warp::path!("api"/"health").and_then(|| async { Ok::<_, Rejection>(StatusCode::OK) });
+    let version_route = warp::path!("api"/"version")
+        .and_then(|| async { Ok::<_, Rejection>(warp::reply::json(&String::from(env!("CARGO_PKG_VERSION")))) });
+
+    let register = warp::path!("api"/"register");
     let register_routes = register
         .and(warp::post())
         .and(warp::body::json())
@@ -61,23 +72,43 @@ async fn main() {
             .and(warp::delete())
             .and(warp::body::json())
             .and(with(clients.clone()))
+            .and(with(chats.clone()))
             .and_then(handler::unregister));
-
-    let publish = warp::path("api/room/create")
+/*
+    let chat_create_route = warp::path!("api"/"chat")
+        .and(warp::post())
         .and(warp::body::json())
         .and(with(clients.clone()))
-        .and_then(handler::publish_handler);
+        .and(with(chats.clone()))
+        .and_then(handler::create_chat);
 
+    let chat_join = warp::path!("api"/"chat"/"join");
+    let chat_join_routes = chat_join
+        .and(warp::post())
+        //.and(warp::body::json())
+        .and(with(clients.clone()))
+        .and(with(chats.clone()))
+        .and_then(|b, c|async{Ok::<_, Rejection>(StatusCode::OK)}/*handler::join_chat_request*/)
+        .or(chat_join
+            .and(warp::delete())
+            //.and(warp::body::json())
+            .and(with(clients.clone()))
+            .and(with(chats.clone()))
+            .and_then(|b, c|async{Ok::<_, Rejection>(StatusCode::OK)}/*handler::leave_chat_request*/));
+    */
     let ws_route = warp::path("ws")
         .and(warp::ws())
         .and(warp::path::param())
         .and(with(clients.clone()))
         .and_then(handler::ws_handler);
 
-    let routes = health_route
+    let routes = index_route
+        .or(health_route)
+        .or(version_route)
         .or(register_routes)
+        .or(chat_create_route)
+        .or(chat_join_routes)
         .or(ws_route)
-        .or(publish)
         .with(warp::cors().allow_any_origin());
 
     warp::serve(routes)

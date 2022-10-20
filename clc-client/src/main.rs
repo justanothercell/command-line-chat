@@ -6,6 +6,7 @@ use crate::client::Client;
 mod client;
 mod input_handler;
 mod web_client;
+mod ws_client;
 
 fn main() {
     let client = Client::new();

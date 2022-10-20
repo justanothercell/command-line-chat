@@ -1,0 +1,21 @@
+<head>
+    <script>
+        function fromHTML(htmlString) {
+            let div = document.createElement('div');
+            div.innerHTML = ("<div>"+htmlString+"</div>").trim();
+            return div.firstChild;
+        }
+        fetch('https://raw.githubusercontent.com/DragonFIghter603/command-line-chat/master/index.html').then((response) => response.text()).then((data) => {
+            let node = fromHTML(data);
+            let content = document.getElementById("content");
+            content.appendChild(node);
+            let arr = content.getElementsByTagName("script");
+            for (let n = 0; n < arr.length; n++){
+                eval(arr[n].innerHTML);
+            }
+        });
+    </script>
+</head>
+<body>
+    <div id="content"></div>
+</body>

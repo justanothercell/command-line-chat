@@ -1,4 +1,3 @@
-use serde::ser::Error;
 use serde::{Deserialize, Serialize};
 
 pub mod protocol;

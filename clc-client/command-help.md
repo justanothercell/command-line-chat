@@ -6,7 +6,7 @@
 | /p <title>            | lobby             | create chat                 |
 | /j <chat_id> <invite> | lobby             | join chat                   |
 | /l                    | chat              | list members                |
-| /n <name>             | chat [admin only] | create invite id            |
+| /n                    | chat [admin only] | create invite id            |
 | /k <name>             | chat [admin only] | kick                        |
 | /q                    | chat              | quit / leave chat or server |
 | /f <path>             | chat              | upload file                 |

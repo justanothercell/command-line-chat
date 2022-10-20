@@ -3,9 +3,12 @@ use std::{thread, time};
 use std::fmt::{Formatter};
 use std::process::exit;
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::mpsc::Sender;
+use std::thread::JoinHandle;
 use getch::Getch;
 use terminal_size::{Height, terminal_size, Width};
-use clc_lib::protocol::{ServerUrl, UserId};
+use websocket::OwnedMessage;
+use clc_lib::protocol::{ChatId, ServerUrl, UserId, UserName};
 use crate::input_handler::handle_input;
 use crate::web_client::{Location};
 
@@ -15,7 +18,11 @@ pub(crate) struct Client {
     pub(crate) input: String,
     pub(crate) loc: Location,
     pub(crate) user_id: Option<UserId>,
-    pub(crate) server: Option<ServerUrl>
+    pub(crate) name: Option<UserName>,
+    pub(crate) chat_id: Option<ChatId>,
+    pub(crate) server: Option<ServerUrl>,
+    pub(crate) socket: Option<(JoinHandle<()>, JoinHandle<()>)>,
+    pub(crate) sender: Option<Sender<OwnedMessage>>
 }
 
 pub(crate) trait ClientSeal {
@@ -34,21 +41,18 @@ impl Client {
             input: String::new(),
             loc: Location::Home,
             user_id: None,
-            server: None
+            name: None,
+            chat_id: None,
+            server: None,
+            socket: None,
+            sender: None
         }
     }
 
     pub(crate) fn run_cli(self){
         let client = Arc::new(Mutex::new(self));
-        let thread_cli = client.clone();
-        let _ = thread::spawn(move || {
-            loop {
-
-            }
-        });
         loop {
             Self::prompt_input(&client);
-            let input = &client.seal().input.clone();
             println!(); // keep input
             handle_input(&client)
         }

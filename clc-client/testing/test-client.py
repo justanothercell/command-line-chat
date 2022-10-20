@@ -17,7 +17,7 @@ def on_open(ws):
 
 if __name__ == '__main__':
     websocket.enableTrace(True)
-    ws = websocket.WebSocketApp('ws://127.0.0.1:8000/ws/f6072768257140e7bca814330a84958b',
+    ws = websocket.WebSocketApp('ws://localhost:8000/ws/3150401727d14614a615e808462d996a',
                                 on_open=on_open,
                                 on_message=on_message,
                                 on_error=on_error,
