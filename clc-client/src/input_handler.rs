@@ -46,6 +46,7 @@ const COMMAND_HELP: &'static str = include_str!("../command-help.md");
 
 pub(crate) fn handle_input(client: &ThreadClient) {
     let mut input = client.seal().input.to_owned();
+    client.seal().input = String::new();
     input = input.trim().to_string();
     if input.is_empty() {
         return;
@@ -136,7 +137,7 @@ fn parse_command(command: String) -> Result<Command, String> {
         macro_rules! args_len {
             ($len: literal, $cmd: literal) => {
                 if args.len() < $len {
-                    Err(format!("Command /{} expects {} args, found {}", $cmd, $len, args.len() - 1))
+                    Err(format!("Command /{} expects {} args, found {}", $cmd, $len, args.len()))
                 }
                 else {
                     Ok(())

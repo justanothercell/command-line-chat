@@ -30,7 +30,7 @@ pub(crate) async fn publish_handler(body: Event, clients: Clients) -> Result<imp
     Ok(StatusCode::OK)
 }
 
-pub(crate) async fn register_handler(body: ServerConnectRequest, clients: Clients) -> Result<impl Reply> {
+pub(crate) async fn register(body: ServerConnectRequest, clients: Clients) -> Result<impl Reply> {
     let name = body.0;
     let uuid = Uuid::new_v4().as_simple().to_string();
 
@@ -50,7 +50,7 @@ async fn register_client(user_id: UserId, name: UserName, clients: Clients) {
     );
 }
 
-pub(crate) async fn unregister_handler(id: String, clients: Clients) -> Result<impl Reply> {
+pub(crate) async fn unregister(id: String, clients: Clients) -> Result<impl Reply> {
     debug!("{} unregistered", id);
     clients.write().await.remove(&id);
     Ok(json(&ServerDisconnectResponse()))
@@ -64,6 +64,6 @@ pub(crate) async fn ws_handler(ws: warp::ws::Ws, id: String, clients: Clients) -
     }
 }
 
-pub(crate) async fn health_handler() -> Result<impl Reply> {
+pub(crate) async fn health() -> Result<impl Reply> {
     Ok(StatusCode::OK)
 }

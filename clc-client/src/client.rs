@@ -49,8 +49,7 @@ impl Client {
         loop {
             Self::prompt_input(&client);
             let input = &client.seal().input.clone();
-            client.seal().writeln(&format!("> {}", input));
-            let _ = stdout().flush();
+            println!(); // keep input
             handle_input(&client)
         }
     }

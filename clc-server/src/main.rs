@@ -28,6 +28,7 @@ macro_rules! debug {
 
 type Result<T> = std::result::Result<T, Rejection>;
 type Clients = Arc<RwLock<HashMap<UserId, Client>>>;
+type Chats = Arc<RwLock<HashMap<ChatId, Chat>>>;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Client {
@@ -38,7 +39,6 @@ pub(crate) struct Client {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Chat {
-    pub(crate) chat_id: ChatId,
     pub(crate) users: Vec<UserId>,
     pub(crate) invites: HashMap<InviteId, UserName>,
     pub(crate) sender: Option<mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>>,
@@ -47,30 +47,31 @@ pub(crate) struct Chat {
 #[tokio::main]
 async fn main() {
     let clients: Clients = Arc::new(RwLock::new(HashMap::new()));
+    let chats: Chats = Arc::new(RwLock::new(HashMap::new()));
 
-    let health_route = warp::path("health").and_then(handler::health_handler);
+    let health_route = warp::path("api/health").and_then(handler::health);
 
-    let register = warp::path("register");
+    let register = warp::path("api/register");
     let register_routes = register
         .and(warp::post())
         .and(warp::body::json())
-        .and(with_clients(clients.clone()))
-        .and_then(handler::register_handler)
+        .and(with(clients.clone()))
+        .and_then(handler::register)
         .or(register
             .and(warp::delete())
             .and(warp::body::json())
-            .and(with_clients(clients.clone()))
-            .and_then(handler::unregister_handler));
+            .and(with(clients.clone()))
+            .and_then(handler::unregister));
 
-    let publish = warp::path("publish")
+    let publish = warp::path("api/room/create")
         .and(warp::body::json())
-        .and(with_clients(clients.clone()))
+        .and(with(clients.clone()))
         .and_then(handler::publish_handler);
 
     let ws_route = warp::path("ws")
         .and(warp::ws())
         .and(warp::path::param())
-        .and(with_clients(clients.clone()))
+        .and(with(clients.clone()))
         .and_then(handler::ws_handler);
 
     let routes = health_route
@@ -86,6 +87,6 @@ async fn main() {
         .run(([127, 0, 0, 1], 8000)).await;
 }
 
-fn with_clients(clients: Clients) -> impl Filter<Extract = (Clients,), Error = Infallible> + Clone {
-    warp::any().map(move || clients.clone())
+fn with<T: Clone + Send>(data: T) -> impl Filter<Extract = (T,), Error = Infallible> + Clone {
+    warp::any().map(move || data.clone())
 }
