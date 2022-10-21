@@ -93,7 +93,7 @@ async fn main() {
         .with(warp::cors().allow_any_origin());
 
     let ip = if cfg!(render_cloud) {
-        ([0, 0, 0, 0], 8000)
+        ([0, 0, 0, 0], 10000)
     } else {
         ([127, 0, 0, 1], 8000)
     };
