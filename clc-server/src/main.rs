@@ -92,7 +92,8 @@ async fn main() {
         .or(ws_route)
         .with(warp::cors().allow_any_origin());
 
-    let ip = if cfg!(render_cloud) {
+    // cheap way to switch between local and render cloud service
+    let ip = if cfg!(debug_assertions) {
         ([0, 0, 0, 0], 10000)
     } else {
         ([127, 0, 0, 1], 8000)
