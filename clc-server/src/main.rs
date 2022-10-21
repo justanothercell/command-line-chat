@@ -92,11 +92,18 @@ async fn main() {
         .or(ws_route)
         .with(warp::cors().allow_any_origin());
 
+    let ip = if cfg!(render_cloud) {
+        ([0, 0, 0, 0], 8000)
+    } else {
+        ([127, 0, 0, 1], 8000)
+    };
+
     warp::serve(routes)
         //.tls()
         //.cert_path("tls/cert.pem")
         //.key_path("tls/key.rsa")
-        .run(([127, 0, 0, 1], 8000)).await;
+
+        .run(ip).await;
 }
 
 fn with<T: Clone + Send>(data: T) -> impl Filter<Extract = (T,), Error = Infallible> + Clone {
