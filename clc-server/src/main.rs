@@ -94,8 +94,10 @@ async fn main() {
 
     // cheap way to switch between local and render cloud service
     let ip = if cfg!(debug_assertions) {
+        println!("Running on remote!");
         ([0, 0, 0, 0], 10000)
     } else {
+        println!("Running locally!");
         ([127, 0, 0, 1], 8000)
     };
 
