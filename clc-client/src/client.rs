@@ -8,7 +8,7 @@ use std::thread::JoinHandle;
 use getch::Getch;
 use terminal_size::{Height, terminal_size, Width};
 use websocket::OwnedMessage;
-use clc_lib::protocol::{ChatId, ServerUrl, UserId, UserName};
+use clc_lib::protocol::{ChatId, ChatTitle, ServerUrl, UserId, UserName, Version};
 use crate::input_handler::handle_input;
 use crate::web_client::{Location};
 
@@ -20,7 +20,10 @@ pub(crate) struct Client {
     pub(crate) user_id: Option<UserId>,
     pub(crate) name: Option<UserName>,
     pub(crate) chat_id: Option<ChatId>,
+    pub(crate) chat_title: Option<ChatTitle>,
+    pub(crate) is_admin: bool,
     pub(crate) server: Option<ServerUrl>,
+    pub(crate) server_version: Option<Version>,
     pub(crate) socket: Option<(JoinHandle<()>, JoinHandle<()>)>,
     pub(crate) sender: Option<Sender<OwnedMessage>>
 }
@@ -43,7 +46,10 @@ impl Client {
             user_id: None,
             name: None,
             chat_id: None,
+            chat_title: None,
+            is_admin: false,
             server: None,
+            server_version: None,
             socket: None,
             sender: None
         }
@@ -53,7 +59,6 @@ impl Client {
         let client = Arc::new(Mutex::new(self));
         loop {
             Self::prompt_input(&client);
-            println!(); // keep input
             handle_input(&client)
         }
     }
@@ -74,8 +79,10 @@ impl Client {
 
     fn refresh_input(&self){
         let (w, _) = Self::term_size();
+        print!("\r{}", " ".repeat(w as usize));
         let s = format!("> {}", self.input);
-        print!("\r{:1$}", s, w as usize);
+        //print!("\r{:1$}", s, w as usize);
+        print!("\r> {}", self.input);
         let _ = stdout().flush();
     }
 

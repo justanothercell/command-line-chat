@@ -84,7 +84,6 @@ dependencies = [
  "clc-lib",
  "futures",
  "serde",
- "syn",
  "tokio",
  "tokio-stream",
  "uuid",

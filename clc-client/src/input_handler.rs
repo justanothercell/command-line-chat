@@ -10,8 +10,9 @@ pub(crate) enum Command {
     Info,
     Connect(ServerUrl, UserName),
     CreateChat(ChatTitle),
-    Join(InviteId),
+    Join(ChatId, InviteId),
     ListMembers,
+    CreateInvite,
     Kick(UserName),
     Quit,
     Upload(FilePath),
@@ -30,12 +31,13 @@ impl Command {
                 Command::Info => 'i',
                 Command::Connect(_, _) => 'c',
                 Command::CreateChat(_) => 'p',
-                Command::Join(_) => 'j',
+                Command::Join(_, _) => 'j',
                 Command::ListMembers => 'l',
+                Command::CreateInvite => 'n',
                 Command::Kick(_) => 'k',
                 Command::Quit => 'q',
                 Command::Upload(_) => 'f',
-                Command::Admin(_) => 'o',
+                Command::Admin(_) => 'y',
                 Command::SendMessage(_) => unreachable!()
             })
         }
@@ -51,19 +53,10 @@ pub(crate) fn handle_input(client: &ThreadClient) {
     if input.is_empty() {
         return;
     }
-    /*Ok(Command::Help) => {
-        client.seal().writeln(COMMAND_HELP);
+    if input.starts_with('/'){
+        client.seal().writeln(&input);
     }
 
-    Ok(Command::Connect(server, name)) => {}
-    Ok(Command::CreateChat(title)) => {}
-    Ok(Command::Join(chat_id, invite)) => {}
-    Ok(Command::ListMembers) => {}
-    Ok(Command::Kick(name)) => {}
-    Ok(Command::Quit) => {}
-    Ok(Command::Upload(file_path)) => {}
-    Ok(Command::Admin(name)) => {}
-    Ok(Command::SendMessage(msg)) => {}*/
     match parse_command(input) {
         Ok(Command::Help) => {
             client.seal().writeln(COMMAND_HELP);
@@ -95,10 +88,12 @@ pub(crate) fn handle_input(client: &ThreadClient) {
             Location::Lobby => {
                 match cmd {
                     Command::Info => {
+                        let c = client.seal();
                         let mut info = String::new();
                         info.push_str(&format!("client-version: {}\n", env!("CARGO_PKG_VERSION")));
-                        info.push_str(&format!("location: {}\n", client.seal().loc));
-                        info.push_str(&format!("server: {}\n", client.seal().server.as_ref().unwrap()));
+                        info.push_str(&format!("location: {}\n", c.loc));
+                        info.push_str(&format!("server: {}\n", c.server.as_ref().unwrap()));
+                        info.push_str(&format!("server-version: {}\n", c.server_version.as_ref().unwrap()));
                         info.push_str("\nJoin a chat with '/j <chat_id> <invite>'\nor create a new one with '/p <title>'");
                         client.seal().writeln(info.trim_end());
                     }
@@ -106,7 +101,10 @@ pub(crate) fn handle_input(client: &ThreadClient) {
                         Client::disconnect_server(client);
                     }
                     Command::CreateChat(title) => {
-                        Client::create_chat(client, title);
+                        Client::send_ws_message(client, ClientWsMessage::ChatCreate(title));
+                    }
+                    Command::Join(chat_id, invite_id) => {
+                        Client::send_ws_message(client, ClientWsMessage::ChatJoin(chat_id, invite_id));
                     }
                     other => {
                         client.seal().writeln(&format!("'{}' is not available in this context", other.cmd_ident()));
@@ -115,11 +113,33 @@ pub(crate) fn handle_input(client: &ThreadClient) {
             }
             Location::Chat => {
                 match cmd {
+                    Command::Info => {
+                        let c = client.seal();
+                        let mut info = String::new();
+                        info.push_str(&format!("client-version: {}\n", env!("CARGO_PKG_VERSION")));
+                        info.push_str(&format!("location: {}\n", c.loc));
+                        info.push_str(&format!("server: {}\n", c.server.as_ref().unwrap()));
+                        info.push_str(&format!("server-version: {}\n", c.server_version.as_ref().unwrap()));
+                        info.push_str(&format!("chat: {}\n", c.chat_title.as_ref().unwrap()));
+                        info.push_str(&format!("is-admin: {}\n", c.is_admin));
+                        c.writeln(info.trim_end());
+                    }
                     Command::Quit => {
-
+                        Client::send_ws_message(client, ClientWsMessage::ChatLeave);
+                        let mut c = client.seal();
+                        c.writeln(&format!("Disconnected from chat {}", c.chat_title.as_ref().unwrap()));
+                        c.loc = Location::Lobby;
+                        c.chat_id = None;
+                        c.chat_title = None;
                     }
                     Command::SendMessage(content) => {
                         Client::send_ws_message(&client, ClientWsMessage::Message(content));
+                    }
+                    Command::CreateInvite => {
+                        Client::send_ws_message(&client, ClientWsMessage::ChatCreateInvite);
+                    }
+                    Command::ListMembers => {
+                        Client::send_ws_message(&client, ClientWsMessage::ChatListMembers);
                     }
                     other => {
                         client.seal().writeln(&format!("'{}' is not available in this context", other.cmd_ident()));
@@ -142,7 +162,7 @@ fn parse_command(command: String) -> Result<Command, String> {
         let mut args: Vec<String> = command.split(' ').filter(|&x| !x.is_empty()).map(|x| String::from(x)).collect();
         macro_rules! args_len {
             ($len: literal, $cmd: literal) => {
-                if args.len() < $len {
+                if args.len() != $len {
                     Err(format!("Command /{} expects {} args, found {}", $cmd, $len, args.len()))
                 }
                 else {
@@ -150,22 +170,29 @@ fn parse_command(command: String) -> Result<Command, String> {
                 }
             }
         }
-        let _ = args.remove(0);
+        macro_rules! arg {
+            () => {
+                args.remove(0)
+            }
+        }
+        if args.remove(0).len() > 2 {
+            return Err(invalid_command!())
+        }
         if command.len() >= 2 {
             match command.as_bytes()[1] as char {
                 '?' => Ok(Command::Help),
                 'i' => Ok(Command::Info),
                 'c' => {
                     args_len!(2, 'c')?;
-                    Ok(Command::Connect(args.remove(0), args.remove(0)))
+                    Ok(Command::Connect(arg!(), arg!()))
                 },
                 'p' => {
                     args_len!(1, 'p')?;
-                    Ok(Command::CreateChat(args.remove(0)))
+                    Ok(Command::CreateChat(arg!()))
                 },
                 'j' => {
-                    args_len!(1, 'j')?;
-                    Ok(Command::Join(args.remove(0)))
+                    args_len!(2, 'j')?;
+                    Ok(Command::Join(arg!(), arg!()))
                 },
                 'l' => Ok(Command::ListMembers),
                 'k' => {
@@ -177,9 +204,13 @@ fn parse_command(command: String) -> Result<Command, String> {
                     args_len!(1, 'f')?;
                     Ok(Command::Upload(args.remove(0)))
                 },
-                'o' => {
-                    args_len!(1, 'o')?;
+                'y' => {
+                    args_len!(1, 'y')?;
                     Ok(Command::Admin(args.remove(0)))
+                },
+                'n' => {
+                    args_len!(0, 'n')?;
+                    Ok(Command::CreateInvite)
                 },
                 _ => Err(invalid_command!())
             }

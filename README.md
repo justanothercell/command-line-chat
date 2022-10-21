@@ -2,6 +2,9 @@
     Opting for the most manual experience, this is truly the best
     and securestest chat solution out there
     - someone
+_[for legal reasons, the above is a joke]_
+
+<br>
 
 The cli was developed on a Windows machine, so the cli might not work as expected 
 on other platforms. If so, please open an [issue](https://github.com/DragonFIghter603/command-line-chat/issues),
@@ -9,6 +12,8 @@ I will try to get it working then.
 
 IDE terminals, such as the ones of jetbrains oftentimes do not play well with a cli.
 I suggest using the default windows cmd.
+
+Info: Debug logs are omitted from release build
 
 `/?` list of [commands](clc-client/command-help.md) 
 

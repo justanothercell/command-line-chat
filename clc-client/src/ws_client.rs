@@ -1,7 +1,10 @@
 use std::sync::mpsc::channel;
 use std::thread;
 use websocket::{ClientBuilder, Message, OwnedMessage};
+use clc_lib::deserialize;
+use clc_lib::protocol::{ServerEvent, ServerWsMessage};
 use crate::client::{ClientSeal, ThreadClient};
+use crate::web_client::Location;
 
 pub(crate) fn create_ws_connection(client: &ThreadClient){
     let ws_client = {
@@ -70,7 +73,10 @@ pub(crate) fn create_ws_connection(client: &ThreadClient){
                         }
                     }
                 }
-                OwnedMessage::Text(content) => r_client.seal().writeln(&format!("received message: {}", content)),
+                OwnedMessage::Text(content) => {
+                    let msg = deserialize(&content).unwrap();
+                    receive_ws_message(msg, &r_client);
+                },
                 _ => r_client.seal().writeln(&format!("received unexpected ws data: {:?}", message)),
             }
         }
@@ -81,4 +87,39 @@ pub(crate) fn create_ws_connection(client: &ThreadClient){
         c.sender = Some(tx);
     }
     client.seal().writeln("Created websocket connection");
+}
+
+pub(crate) fn receive_ws_message(message: ServerWsMessage, client: &ThreadClient){
+    match message {
+        ServerWsMessage::Message(_sender_id, sender, content) => client.seal().writeln(&format!("[{}]: {}", sender, content)),
+        ServerWsMessage::SystemMessage(content) => client.seal().writeln(&content),
+        ServerWsMessage::SystemEvent(event) => match event {
+            ServerEvent::ChatAccept(chat_id, chat_title) => {
+                let mut c = client.seal();
+                c.writeln(&format!("Joined chat {}", chat_title));
+                c.chat_id = Some(chat_id);
+                c.chat_title = Some(chat_title);
+                c.is_admin = false;
+                c.loc = Location::Chat;
+            }
+            ServerEvent::ChatCreate(chat_id, chat_title) => {
+                let mut c = client.seal();
+                c.writeln(&format!("Created chat {}", chat_title));
+                c.chat_id = Some(chat_id);
+                c.chat_title = Some(chat_title);
+                c.is_admin = true;
+                c.loc = Location::Chat;
+            }
+            ServerEvent::SetAdmin(is_admin) => {
+                let mut c = client.seal();
+                if is_admin {
+                    c.writeln("You are now admin of this chat");
+                }
+                else {
+                    c.writeln("You are no longer admin of this chat");
+                }
+                c.is_admin = is_admin;
+            }
+        }
+    }
 }

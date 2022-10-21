@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 use websocket::OwnedMessage;
 use clc_lib::{deserialize, serialize};
-use clc_lib::protocol::{ChatCreateRequest, ChatCreateResponse, ChatTitle, ClientWsMessage, Response, ServerConnectRequest, ServerConnectResponse, ServerDisconnectRequest, ServerDisconnectResponse, ServerUrl, UserName};
+use clc_lib::protocol::{ChatTitle, ClientWsMessage, Response, ServerConnectRequest, ServerConnectResponse, ServerDisconnectRequest, ServerDisconnectResponse, ServerUrl, UserName};
 use crate::Client;
 use crate::client::{ClientSeal, ThreadClient};
 use crate::ws_client::create_ws_connection;
@@ -16,13 +16,14 @@ enum Method {
 impl Client {
     pub(crate) fn connect_server(client: &ThreadClient, url: ServerUrl, name: UserName) {
         match Self::request(Method::Post, format!("http://{}/api/register", url), &ServerConnectRequest(name.clone())) {
-            Ok(Response::Accept(ServerConnectResponse(uuid))) => {
+            Ok(Response::Accept(ServerConnectResponse(uuid, version))) => {
                 {
                     let mut c = client.seal();
                     c.server = Some(url.clone());
                     c.name = Some(name.clone());
                     c.user_id = Some(uuid);
                     c.loc = Location::Lobby;
+                    c.server_version = Some(version);
                     c.writeln(&format!("Connected to server {} as {}", url, name));
                 }
                 create_ws_connection(client);
@@ -44,7 +45,9 @@ impl Client {
                 c.user_id = None;
                 c.name = None;
                 c.chat_id = None;
+                c.chat_title = None;
                 c.sender = None;
+                c.server_version = None;
                 let _ = c.socket.take().map(|(s, r)| {
                     s.join().expect("Unable to join send_loop thread");
                     r.join().expect("Unable to join read_loop thread");
@@ -61,23 +64,6 @@ impl Client {
 
     pub(crate) fn send_ws_message(client: &ThreadClient, message: ClientWsMessage){
         client.seal().sender.as_ref().unwrap().send(OwnedMessage::Text(serialize(&message).expect("Unable to serialize"))).expect("Unable to send message");
-    }
-
-    pub(crate) fn create_chat(client: &ThreadClient, title: ChatTitle){
-        let url = client.seal().server.as_ref().unwrap().clone();
-        let user_id = client.seal().user_id.as_ref().unwrap().clone();
-        match Self::request(Method::Post, format!("http://{}/api/chat", url), &ChatCreateRequest(user_id, title.clone())) {
-            Ok(Response::Accept(ChatCreateResponse(chat_id))) => {
-                let mut c = client.seal();
-                c.chat_id = Some(chat_id.clone());
-                c.loc = Location::Chat;
-                c.writeln(&format!("Created chat {} with id {}", title, chat_id));
-            }
-            Ok(Response::Fail(reason)) => client.seal().writeln(&format!("Error: {}", reason)),
-            Err(e) => {
-                client.seal().writeln(&format!("Unable to create chat: {}", e));
-            }
-        }
     }
 
     fn request<B: Serialize, R: for<'a> Deserialize<'a>>(method: Method, url: String, body: &B) -> Result<R, String>{

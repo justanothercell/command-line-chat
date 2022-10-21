@@ -4,10 +4,11 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use warp::{ws::Message, Filter, Rejection};
 use warp::http::StatusCode;
-use clc_lib::protocol::{ChatId, ChatTitle, InviteId, UserId, UserName};
+use clc_lib::protocol::{ChatId, ChatTitle, InviteId, ServerVersion, UserId, UserName};
 
 mod handler;
 mod ws;
+mod chat;
 
 #[cfg(debug_assertions)]
 #[macro_export]
@@ -30,6 +31,8 @@ macro_rules! debug {
 type Result<T> = std::result::Result<T, Rejection>;
 type Clients = Arc<RwLock<HashMap<UserId, Client>>>;
 type Chats = Arc<RwLock<HashMap<ChatId, Chat>>>;
+
+const SERVER_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, Clone)]
 pub(crate) struct Client {
@@ -60,7 +63,7 @@ async fn main() {
 
     let health_route = warp::path!("api"/"health").and_then(|| async { Ok::<_, Rejection>(StatusCode::OK) });
     let version_route = warp::path!("api"/"version")
-        .and_then(|| async { Ok::<_, Rejection>(warp::reply::json(&String::from(env!("CARGO_PKG_VERSION")))) });
+        .and_then(|| async { Ok::<_, Rejection>(warp::reply::json(&ServerVersion(SERVER_VERSION.to_string()))) });
 
     let register = warp::path!("api"/"register");
     let register_routes = register
@@ -74,40 +77,18 @@ async fn main() {
             .and(with(clients.clone()))
             .and(with(chats.clone()))
             .and_then(handler::unregister));
-/*
-    let chat_create_route = warp::path!("api"/"chat")
-        .and(warp::post())
-        .and(warp::body::json())
-        .and(with(clients.clone()))
-        .and(with(chats.clone()))
-        .and_then(handler::create_chat);
 
-    let chat_join = warp::path!("api"/"chat"/"join");
-    let chat_join_routes = chat_join
-        .and(warp::post())
-        //.and(warp::body::json())
-        .and(with(clients.clone()))
-        .and(with(chats.clone()))
-        .and_then(|b, c|async{Ok::<_, Rejection>(StatusCode::OK)}/*handler::join_chat_request*/)
-        .or(chat_join
-            .and(warp::delete())
-            //.and(warp::body::json())
-            .and(with(clients.clone()))
-            .and(with(chats.clone()))
-            .and_then(|b, c|async{Ok::<_, Rejection>(StatusCode::OK)}/*handler::leave_chat_request*/));
-    */
     let ws_route = warp::path("ws")
         .and(warp::ws())
         .and(warp::path::param())
         .and(with(clients.clone()))
+        .and(with(chats.clone()))
         .and_then(handler::ws_handler);
 
     let routes = index_route
         .or(health_route)
         .or(version_route)
         .or(register_routes)
-        .or(chat_create_route)
-        .or(chat_join_routes)
         .or(ws_route)
         .with(warp::cors().allow_any_origin());
 
