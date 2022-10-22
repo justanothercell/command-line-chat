@@ -1,4 +1,7 @@
 # clc in rust
+
+# This does currently not work, since i was unable to convert ws to wss
+
     Opting for the most manual experience, this is truly the best
     and securestest chat solution out there
     - someone
