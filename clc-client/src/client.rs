@@ -7,7 +7,7 @@ use std::sync::mpsc::Sender;
 use std::thread::JoinHandle;
 use getch::Getch;
 use terminal_size::{Height, terminal_size, Width};
-use websocket::OwnedMessage;
+use tungstenite::Message;
 use clc_lib::protocol::{ChatId, ChatTitle, ServerUrl, UserId, UserName, Version};
 use crate::input_handler::handle_input;
 use crate::web_client::{Location};
@@ -24,8 +24,8 @@ pub(crate) struct Client {
     pub(crate) is_admin: bool,
     pub(crate) server: Option<ServerUrl>,
     pub(crate) server_version: Option<Version>,
-    pub(crate) socket: Option<(JoinHandle<()>, JoinHandle<()>)>,
-    pub(crate) sender: Option<Sender<OwnedMessage>>
+    pub(crate) socket: Option<JoinHandle<()>>,
+    pub(crate) sender: Option<Sender<Message>>
 }
 
 pub(crate) trait ClientSeal {

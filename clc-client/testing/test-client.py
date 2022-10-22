@@ -13,11 +13,12 @@ def on_close(ws, close_status_code, close_msg):
     print('### closed ###')
 
 def on_open(ws):
+    print(ws.__dict__)
     print('Opened connection')
 
 if __name__ == '__main__':
     websocket.enableTrace(True)
-    ws = websocket.WebSocketApp('ws://localhost:8000/ws/3150401727d14614a615e808462d996a',
+    ws = websocket.WebSocketApp('wss://clc.onrender.com/ws/3d4ffd31c28549c992dc6f25ce1c390a',
                                 on_open=on_open,
                                 on_message=on_message,
                                 on_error=on_error,

@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
-use websocket::OwnedMessage;
+use tungstenite::Message;
 use clc_lib::{deserialize, serialize};
 use clc_lib::protocol::{ChatTitle, ClientWsMessage, Response, ServerConnectRequest, ServerConnectResponse, ServerDisconnectRequest, ServerDisconnectResponse, ServerUrl, UserName};
 use crate::Client;
@@ -15,7 +15,7 @@ enum Method {
 
 impl Client {
     pub(crate) fn connect_server(client: &ThreadClient, url: ServerUrl, name: UserName) {
-        match Self::request(Method::Post, format!("http://{}/api/register", url), &ServerConnectRequest(name.clone())) {
+        match Self::request(Method::Post, format!("https://{}/api/register", url), &ServerConnectRequest(name.clone())) {
             Ok(Response::Accept(ServerConnectResponse(uuid, version))) => {
                 {
                     let mut c = client.seal();
@@ -38,7 +38,7 @@ impl Client {
     pub(crate) fn disconnect_server(client: &ThreadClient) {
         let url = client.seal().server.as_ref().unwrap().clone();
         let user_id = client.seal().user_id.as_ref().unwrap().clone();
-        match Self::request(Method::Delete, format!("http://{}/api/register", url), &ServerDisconnectRequest(user_id)) {
+        match Self::request(Method::Delete, format!("https://{}/api/register", url), &ServerDisconnectRequest(user_id)) {
             Ok(Response::Accept(ServerDisconnectResponse())) => {
                 let mut c = client.seal();
                 c.server = None;
@@ -46,12 +46,12 @@ impl Client {
                 c.name = None;
                 c.chat_id = None;
                 c.chat_title = None;
-                c.sender = None;
                 c.server_version = None;
-                let _ = c.socket.take().map(|(s, r)| {
-                    s.join().expect("Unable to join send_loop thread");
-                    r.join().expect("Unable to join read_loop thread");
+                let _ = c.socket.take().map(|s| {
+                    let _ = c.sender.as_ref().unwrap().send(Message::Close(None));
+                    s.join().expect("Unable to join ws thread");
                 });
+                c.sender = None;
                 c.loc = Location::Home;
                 c.writeln(&format!("Disconnected from server {}", url));
             }
@@ -63,7 +63,7 @@ impl Client {
     }
 
     pub(crate) fn send_ws_message(client: &ThreadClient, message: ClientWsMessage){
-        client.seal().sender.as_ref().unwrap().send(OwnedMessage::Text(serialize(&message).expect("Unable to serialize"))).expect("Unable to send message");
+        client.seal().sender.as_ref().unwrap().send(Message::Text(serialize(&message).expect("Unable to serialize"))).expect("Unable to send message");
     }
 
     fn request<B: Serialize, R: for<'a> Deserialize<'a>>(method: Method, url: String, body: &B) -> Result<R, String>{

@@ -1,18 +1,89 @@
 use std::sync::mpsc::channel;
 use std::thread;
-use websocket::{ClientBuilder, Message, OwnedMessage};
+use native_tls::{TlsConnector, TlsConnectorBuilder, TlsStream};
+use reqwest::Url;
+//use tungstenite::{accept, connect, Message};
+//use tungstenite::client::client as create_client;
+use tokio_tungstenite::tungstenite::stream::
 use clc_lib::deserialize;
 use clc_lib::protocol::{ServerEvent, ServerWsMessage};
 use crate::client::{ClientSeal, ThreadClient};
 use crate::web_client::Location;
 
 pub(crate) fn create_ws_connection(client: &ThreadClient){
-    let ws_client = {
+    let url = {
         let c = client.seal();
-        ClientBuilder::new(&format!("ws://{}/ws/{}", c.server.as_ref().unwrap(), c.user_id.as_ref().unwrap()))
+        &format!("wss://{}/ws/{}", c.server.as_ref().unwrap(), c.user_id.as_ref().unwrap())
+    };
+    println!("OOOOOO");
+    let tcp_stream = TcpStream::connect(&format!("{}:443", client.seal().server.as_ref().unwrap()));
+    println!("111111");
+    let (mut socket, _response) = create_client(url, tcp_stream).expect("Can't connect");
+    println!("222222");
+    let ws_client = client.clone();
+    let (tx, rx) = channel();
+    let socket_thread = thread::spawn(move || {
+        loop {
+            // === receive message from client and send to server ===
+            let message = match rx.recv() {
+                Ok(Message::Close(f)) => {
+                    ws_client.seal().writeln(&format!("Websocket closed"));
+                    let _ = socket.write_message(Message::Close(f));
+                    return;
+                }
+                Ok(m) => m,
+                Err(e) => {
+                    ws_client.seal().writeln(&format!("Websocket thread error: {}", e));
+                    return;
+                }
+            };
+            match socket.write_message(message) {
+                Ok(()) => (),
+                Err(e) => {
+                    ws_client.seal().writeln(&format!("Websocket send error: {:?}", e));
+                    let _ = socket.write_message(Message::Close(None));
+                    return;
+                }
+            }
+
+            // === receive message from server ===
+            match socket.read_message() {
+                Err(_) => {} // no message on nonblocking
+                Ok(message) => {
+                    match message {
+                        Message::Text(content) => {
+                            let msg = deserialize(&content).unwrap();
+                            receive_ws_message(msg, &ws_client);
+                        }
+                        Message::Binary(_) => panic!("Unsupported"),
+                        Message::Ping(data) => { let _ = socket.write_message(Message::Pong(data)); },
+                        Message::Pong(_) => {/* ponged */}
+                        Message::Close(_) => {
+                            let _ = socket.write_message(message);
+                            ws_client.seal().writeln(&format!("Websocket send_thread closed"));
+                            return;
+                        }
+                        Message::Frame(_) => unreachable!("Docs say this is unobtainable with reading")
+                    }
+                }
+            }
+        }
+    });
+    {
+        let mut c = client.seal();
+        c.socket = Some(socket_thread);
+        c.sender = Some(tx);
+        c.writeln("Created websocket connection");
+    }
+    /*let ws_client = {
+        let c = client.seal();
+        println!("wss://{}/ws/{}", c.server.as_ref().unwrap(), c.user_id.as_ref().unwrap());
+        ClientBuilder::new(&format!("wss://{}/ws/{}", c.server.as_ref().unwrap(), c.user_id.as_ref().unwrap()))
             .unwrap()
             .add_protocol("rust-websocket")
-            .connect_insecure()
+            .async_connect_secure(None).and_then(|(sc, h)| {
+
+        })
             .unwrap()
     };
     let (mut receiver, mut sender) = ws_client.split().unwrap();
@@ -85,8 +156,7 @@ pub(crate) fn create_ws_connection(client: &ThreadClient){
         let mut c = client.seal();
         c.socket = Some((send_loop, receive_loop));
         c.sender = Some(tx);
-    }
-    client.seal().writeln("Created websocket connection");
+    }*/
 }
 
 pub(crate) fn receive_ws_message(message: ServerWsMessage, client: &ThreadClient){

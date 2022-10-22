@@ -92,21 +92,12 @@ async fn main() {
         .or(ws_route)
         .with(warp::cors().allow_any_origin());
 
-    // cheap way to switch between local and render cloud service
-    let ip = if cfg!(debug_assertions) {
-        println!("Running on remote!");
-        ([0, 0, 0, 0], 10000)
-    } else {
-        println!("Running locally!");
-        ([127, 0, 0, 1], 8000)
-    };
-
     warp::serve(routes)
         //.tls()
         //.cert_path("tls/cert.pem")
         //.key_path("tls/key.rsa")
 
-        .run(ip).await;
+        .run(([0, 0, 0, 0], 10000)).await;
 }
 
 fn with<T: Clone + Send>(data: T) -> impl Filter<Extract = (T,), Error = Infallible> + Clone {
